@@ -24,6 +24,11 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* List of processes in Blocked status */
+static struct list blocked_list;
+
+
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -92,6 +97,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&blocked_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -137,7 +143,39 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+    
+  
+  /*traverse total sleeping list and check if any process is available to add on the end of ready list*/
+  thread_traverse_block();
 }
+
+void 
+thread_traverse_block (void)
+{
+  enum intr_level old_level;
+  old_level = intr_disable();
+  struct thread *t;
+  struct thread *tmp;
+  if (list_empty(&blocked_list)){
+    return;
+  }else{
+    t = list_begin(&blocked_list);
+    while ( list_end(&blocked_list) != &t->elem ){
+      if( (t->ticks_left - 1) != 0 ){
+        t->ticks_left = t->ticks_left - 1;
+        t = list_entry (list_next(&t->elem), struct thread, elem);
+      }else{
+        t->ticks_left = -1;
+        thread_unblock(t);
+        tmp = list_entry (list_remove(&t->elem), struct thread, elem);
+        list_push_back(&ready_list, &t->elem);
+        t = tmp;
+      }
+    }
+    intr_set_level(old_level);
+  }
+}
+
 
 /* Prints thread statistics. */
 void
@@ -215,8 +253,12 @@ thread_block (void)
 {
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
+  
+  struct thread *cur = thread_current ();
 
-  thread_current ()->status = THREAD_BLOCKED;
+  cur->status = THREAD_BLOCKED;
+  list_push_back(&blocked_list, &cur->elem);
+  /*  list_push_back( &blocked_list ,&thread_current()->elem);*/
   schedule ();
 }
 
