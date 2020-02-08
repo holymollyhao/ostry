@@ -216,31 +216,6 @@ lock_acquire (struct lock *lock)
   intr_set_level (old_level);
 }
 
-// void
-// lock_acquire (struct lock *lock)
-// {
-//   ASSERT (lock != NULL);
-//   ASSERT (!intr_context ());
-//   ASSERT (!lock_held_by_current_thread (lock));
-
-//   enum intr_level old_level = intr_disable();
-
-//   if (!thread_mlfqs && lock->holder)
-//     {
-//       thread_current()->waiting_on_lock = lock;
-//       list_insert_ordered(&lock->holder->donation_list,
-// 			  &thread_current()->donation_list_elem,
-//         thread_donation_list_func, 0);
-//     }
-
-//   sema_down (&lock->semaphore);
-
-//   thread_current()->waiting_on_lock = NULL;
-//   lock->holder = thread_current ();
-//   intr_set_level(old_level);
-// }
-
-
 
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -284,25 +259,6 @@ lock_release (struct lock *lock)
 
   intr_set_level (old_level);
 }
-
-// void
-// lock_release (struct lock *lock) 
-// {
-//   ASSERT (lock != NULL);
-//   ASSERT (lock_held_by_current_thread (lock));
-
-//   enum intr_level old_level = intr_disable();
-//   lock->holder = NULL;
-//   if (!thread_mlfqs)
-//     {
-//       thread_with_lock_remove(lock);
-//       // ^ Removes threads from donation list waiting for released lock
-//       priority_calculation();
-//       // ^ Updates priority
-//     }
-//   sema_up (&lock->semaphore);
-//   intr_set_level (old_level);
-// }
 
 
 
