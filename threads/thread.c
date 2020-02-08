@@ -183,13 +183,25 @@ thread_traverse_block (void)
 
 /* less function of list_sorting */
 bool
-thread_bool_priority(struct list_elem * e1, struct list_elem *e2, void *aux){
+thread_bool_priority( struct list_elem * e1,  struct list_elem *e2, void *aux){
   struct thread *t1;
   struct thread *t2;
   t1 = list_entry(e1, struct thread, elem);
   t2 = list_entry(e2, struct thread, elem);
   return (t1->priority > t2->priority);
 }
+
+bool
+thread_donation_list_func( struct list_elem *e1, struct list_elem*e2, void *aux){
+  struct thread *t1;
+  struct thread *t2;
+  t1 = list_entry(e1, struct thread, donation_list_elem);
+  t2 = list_entry(e2, struct thread, donation_list_elem);
+
+  return (t1->priority > t2->priority);
+
+}
+
 
 /* Creates a new kernel thread named NAME with the given initial
    PRIORITY, which executes FUNCTION passing AUX as the argument,
@@ -252,7 +264,15 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  
+  /* Rearranging run queue */
 
+  if(!list_empty(&ready_list)){/*if not empty*/
+    if((thread_current ()->priority)<(list_entry(list_front(&ready_list), struct thread, elem)->priority)){
+      thread_yield();
+    }
+  }
+  
   return tid;
 }
 
@@ -402,9 +422,26 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  list_sort(&ready_list, thread_bool_priority, 0);
+  enum intr_level old_level = intr_disable ();
+  int old_priority = thread_current ()->priority;
+  thread_current ()->original_priority = new_priority;
+  
+  priority_calculation();
+  if (old_priority < thread_current()->priority){
+    priority_donation();
+  }
+  if(old_priority > thread_current()->priority){
+    if(!list_empty(&ready_list)){/*if not empty*/
+      if((thread_current ()->priority)<(list_entry(list_front(&ready_list), struct thread, elem)->priority)){
+        thread_yield();
+      }
+    }
+  }
+  intr_set_level (old_level);
+  
 }
+
+
 
 /* Returns the current thread's priority. */
 int
@@ -523,12 +560,18 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
 
+
+  
+
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->original_priority = priority;
+  t->waiting_on_lock = NULL;
   t->magic = THREAD_MAGIC;
+  list_init(&t->donation_list);
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -642,7 +685,73 @@ allocate_tid (void)
   return tid;
 }
 
+/* Donation upon thread, for nested donation-wise*/
 
+
+void
+priority_donation(void){
+  struct thread *curr = thread_current();
+  struct thread *next;
+  int count = 8;
+  while(count){
+    count = count -1;
+    if(curr->waiting_on_lock && curr->waiting_on_lock ->holder){
+      next = curr->waiting_on_lock->holder;
+      if(curr->priority >= next->priority){
+        next ->priority = curr->priority;
+        curr = next;
+      }else{
+        break;
+      }
+    }else{
+      break;
+    }
+  }
+}
+/* Refreshing total priority */
+
+void
+priority_calculation(void){
+  struct thread *curr = thread_current();
+  curr->priority = curr->original_priority;
+  if(!list_empty(&curr->donation_list)){
+    struct thread *interest = list_entry(list_front(&curr->donation_list), struct thread, donation_list_elem);
+    if( interest->priority > curr->priority){
+      curr->priority = interest->priority;
+    }
+}}
+
+
+
+/* Removing with locks*/
+void
+thread_with_lock_remove(struct lock *removal_lock){
+  struct thread *t;
+  struct list_elem *e;
+  
+    
+  if(!list_empty(&thread_current()->donation_list)){
+    e = list_begin(&thread_current()->donation_list);
+    while (e != list_end (&thread_current()->donation_list)){
+      t = list_entry(e, struct thread, donation_list_elem );
+      if( t->waiting_on_lock == removal_lock){
+        e = list_remove(e);
+      }else{
+        e = list_next(e);
+      }
+    }
+  }
+}
+
+
+void test_max_priority (void)
+{
+  if(!list_empty(&ready_list)){/*if not empty*/
+    if((thread_current ()->priority)<(list_entry(list_front(&ready_list), struct thread, elem)->priority)){
+      thread_yield();
+    }
+  }
+}
 
 
 /* Offset of `stack' member within `struct thread'.
