@@ -1,0 +1,4 @@
+Use of uninitialized value $avg in numeric ge (>=) at /Users/teewon/Desktop/pintos_mac/utils/pintos line 903.
+WARNING: Image format was not specified for '/var/folders/nr/jhxq1qdj7nsb53t9d0b2pwww0000gn/T/5ShQ2V4HUI.dsk' and probing guessed raw.
+         Automatically detecting the format is dangerous for raw images, write operations on block 0 will be restricted.
+         Specify the 'raw' format explicitly to remove the restrictions.
